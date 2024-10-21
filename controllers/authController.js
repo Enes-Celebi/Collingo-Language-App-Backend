@@ -1,4 +1,3 @@
-// Inside authController.js
 const authService = require('../services/authService');
 
 const validateEmail = (email) => {
@@ -6,26 +5,84 @@ const validateEmail = (email) => {
     return re.test(email);
 };
 
+exports.requestPasswordReset = async (req, res) => {
+    const { email } = req.body;
+
+    try {
+        if (!email) {
+            return res.status(400).json({ error: 'email required' });
+        }
+
+        if (!validateEmail(email)) {
+            return res.status(400).json({ error: 'invalid email format' });
+        }
+
+        await authService.requestPasswordReset(email);
+
+        return res.status(200).json({ message: 'code sent successfully to your email' });
+    } catch (error) {
+        console.error("error during password reset request:", error);
+        return res.status(500).json({ error: error.message || 'an unexpected error occurred' });
+    }
+};
+
+exports.verifyResetCode = async (req, res) => {
+    const { email, code } = req.body;
+
+    try {
+        const user = await authService.findUserByEmail(email);
+        if (!user) {
+            return res.status(404).json({ error: 'user not found' });
+        }
+
+        if (user.reset_code === code && user.reset_code_expires > Date.now()) {
+            return res.status(200).json({ message: 'code verified successfully. you can now reset your password.' });
+        }
+
+        return res.status(400).json({ error: 'invalid or expired code' });
+    } catch (error) {
+        console.error("error during code verification:", error);
+        return res.status(500).json({ error: 'an unexpected error occurred' });
+    }
+};
+
+exports.resetPasswordWithCode = async (req, res) => {
+    const { email, code, newPassword } = req.body; 
+
+    try {
+        if (!email || !code || !newPassword) {
+            return res.status(400).json({ error: 'email, code, and newPassword are required' });
+        }
+
+        await authService.resetPasswordWithCode(email, code, newPassword); 
+
+        return res.status(200).json({ message: 'password reset successfully.' });
+    } catch (error) {
+        console.error("error during password reset:", error);
+        return res.status(400).json({ error: error.message || 'Password reset failed.' });
+    }
+};
+
 exports.registerUser = async (req, res) => {
     try {
         const { email, name, password } = req.body;
 
         if (!email || !name || !password) {
-            return res.status(400).json({ error: 'All fields are required.' });
+            return res.status(400).json({ error: 'email, name, and password are required' });
         }
 
         if (!validateEmail(email)) {
-            return res.status(400).json({ error: 'Invalid email format.' });
+            return res.status(400).json({ error: 'invalid email format' });
         }
 
         const newUser = await authService.registerUser(email, name, password);
 
         return res.status(201).json({
-            message: 'User registered successfully. Please check your email to verify your account.',
+            message: 'user registered successfully. verify your account from your email.',
             user: newUser,
         });
     } catch (error) {
-        console.error("Error during user registration:", error);
+        console.error("error during user registration:", error);
 
         if (error.message === 'User already exists' || error.code === 'USER_EXISTS') {
             return res.status(409).json({ error: 'User already exists!' });
@@ -114,5 +171,30 @@ exports.resendVerificationLink = async (req, res) => {
     } catch (error) {
         console.error("Error during resending verification email:", error);
         return res.status(500).json({ error: error.message || 'Failed to resend verification email.' });
+    }
+};
+
+exports.changeUsername = async (req, res) => {
+    const { email, newUsername } = req.body;
+
+    try {
+        if (!email || !newUsername) {
+            return res.status(400).json({ error: 'Email and new username are required.' });
+        }
+
+        const user = await authService.findUserByEmail(email);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        const updatedUser = await authService.changeUsername(user.id, newUsername);
+
+        return res.status(200).json({
+            message: 'Username changed successfully.',
+            user: updatedUser
+        });
+    } catch (error) {
+        console.error("Error during username change:", error);
+        return res.status(500).json({ error: error.message || 'Failed to change username.' });
     }
 };

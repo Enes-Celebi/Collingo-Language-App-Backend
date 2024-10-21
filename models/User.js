@@ -1,4 +1,4 @@
-const { Model, DataTypes} = require('sequelize');
+const { Model, DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 
 class User extends Model {}
@@ -23,6 +23,14 @@ User.init({
     },
     verificationToken: {
         type: DataTypes.STRING,
+        allowNull: true
+    },
+    reset_code: {  
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    reset_code_expires: {  
+        type: DataTypes.DATE,
         allowNull: true
     }
 }, {

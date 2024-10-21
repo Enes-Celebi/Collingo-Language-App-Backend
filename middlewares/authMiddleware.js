@@ -1,10 +1,15 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const User = require('../models/user');
 
 exports.verifyToken = async (req, res, next) => {
-    const token = req.headers['authorization'];
-    if(!token) {
-        return res.status(403).send("A token is required for authentication");
+    let token = req.headers['authorization'];
+
+    if (!token) {
+        return res.status(403).json({ error: 'A token is required for authentication' });
+    }
+
+    if (token.startsWith('Bearer ')) {
+        token = token.slice(7, token.length).trimLeft(); 
     }
 
     try {
@@ -12,11 +17,24 @@ exports.verifyToken = async (req, res, next) => {
         req.user = decoded;
 
         const user = await User.findByPk(decoded.id);
-        if(!user || !user.isVerified) {
-            return res.status(403).send("User is not verified");
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
         }
+
+        if (!user.isVerified) {
+            return res.status(403).json({ error: 'User is not verified' });
+        }
+
+        next();
     } catch (error) {
-        return res.status(401).send("Invalid Token");
+        console.error('Error verifying token:', error);
+
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ error: 'Token has expired' });
+        } else if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ error: 'Invalid token' });
+        } else {
+            return res.status(500).json({ error: 'Internal Server Error' });
+        }
     }
-    return next();
 };

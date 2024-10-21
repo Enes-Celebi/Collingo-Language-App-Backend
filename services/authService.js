@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
     secure: true,
     auth: {
         user: 'dev.collingo@gmail.com',
-        pass: 'udup wpwv yuxv ntxo', 
+        pass: 'udup wpwv yuxv ntxo',
     },
 });
 
@@ -20,6 +20,82 @@ const findUserByEmail = async (email) => {
 };
 
 exports.findUserByEmail = findUserByEmail;
+
+exports.requestPasswordReset = async (email) => {
+    const user = await findUserByEmail(email);
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString(); 
+
+    const expirationTimeInSeconds = Math.floor(Date.now() / 1000) + 3600; 
+    
+    await pool.query('UPDATE users SET reset_code = $1, reset_code_expires = to_timestamp($2) WHERE id = $3', [
+        resetCode,
+        expirationTimeInSeconds, 
+        user.id
+    ]);
+
+    await sendPasswordResetEmail(email, resetCode);
+};
+
+const sendPasswordResetEmail = async (email, resetCode) => {
+    await transporter.sendMail({
+        to: email,
+        subject: 'Your password reset code',
+        html: `
+            <p>Hi there!</p>
+            <p>You have requested to reset your password. Use the code below to reset your password:</p>
+            <h2>${resetCode}</h2>
+            <p>This code is valid for 1 hour. If you did not request this, please ignore this email.</p>
+        `,
+    });
+};
+
+exports.verifyResetCode = async (req, res) => {
+    const { email, code } = req.body;
+
+    try {
+        const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const user = userResult.rows[0];
+
+        if (user.reset_code !== code || user.reset_code_expires < Date.now()) {
+            return res.status(400).json({ message: 'Invalid or expired reset code' });
+        }
+
+        return res.status(200).json({ message: 'Code verified. You can now reset your password.' });
+
+    } catch (error) {
+        console.error("Error verifying reset code: ", error);
+        return res.status(500).json({ message: 'Code verification failed. Please try again.' });
+    }
+};
+
+exports.resetPasswordWithCode = async (email, code, newPassword) => {
+    const userResult = await pool.query(
+        'SELECT * FROM users WHERE email = $1 AND reset_code = $2 AND reset_code_expires > NOW()', 
+        [email, code]
+    );
+
+    if (userResult.rows.length === 0) {
+        throw new Error('Invalid or expired reset code');
+    }
+
+    const user = userResult.rows[0];
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await pool.query(
+        'UPDATE users SET password = $1, reset_code = NULL, reset_code_expires = NULL WHERE id = $2', 
+        [hashedPassword, user.id]
+    );
+};
 
 exports.loginUser = async (email, password) => {
     try {
@@ -137,4 +213,19 @@ exports.resendVerificationEmail = async (email) => {
         console.error("Error resending verification email: ", error);
         throw new Error(error.message || 'Failed to resend verification email. Please try again.');
     }
+};
+
+exports.changeUsername = async (userId, newUsername) => {
+    const existingUser = await pool.query('SELECT * FROM users WHERE name = $1', [newUsername]);
+    if (existingUser.rows.length > 0) {
+        throw new Error('Username already exists');
+    }
+
+    const result = await pool.query('UPDATE users SET name = $1 WHERE id = $2 RETURNING *', [newUsername, userId]);
+    
+    if (result.rows.length === 0) {
+        throw new Error('User not found');
+    }
+
+    return result.rows[0];  
 };
