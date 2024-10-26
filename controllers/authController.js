@@ -14,7 +14,7 @@ exports.requestPasswordReset = async (req, res) => {
         }
 
         if (!validateEmail(email)) {
-            return res.status(400).json({ error: 'invalid email format' });
+            return res.status(401).json({ error: 'invalid email format' });
         }
 
         await authService.requestPasswordReset(email);
@@ -72,7 +72,11 @@ exports.registerUser = async (req, res) => {
         }
 
         if (!validateEmail(email)) {
-            return res.status(400).json({ error: 'invalid email format' });
+            return res.status(401).json({ error: 'invalid email format' });
+        }
+
+        if (password.length < 8) {
+            return res.status(402).json({ error: 'password must be at least 8 characters'})
         }
 
         const newUser = await authService.registerUser(email, name, password);
