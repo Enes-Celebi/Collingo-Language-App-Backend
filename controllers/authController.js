@@ -1,3 +1,4 @@
+const jwt = require('jsonwebtoken');
 const authService = require('../services/authService');
 
 const validateEmail = (email) => {
@@ -128,6 +129,38 @@ exports.loginUser = async (req, res) => {
         }
     }
 };
+
+exports.validateToken = async (req, res) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) {
+            return res.status(400).json({ error: 'Token is required.' });
+        }
+
+        const user = await authService.validateToken(token);
+
+        return res.status(200).json({
+            message: 'Login successful',
+            user,
+        });
+
+    } catch (error) {
+        console.error("Error during token-based login:", error);
+
+        if (error.message === 'User not found') {
+            return res.status(404).json({ error: 'User not found!' });
+        } else if (error.message === 'Email not verified') {
+            return res.status(401).json({ error: 'Email not verified!' });
+        } else if (error.message === 'Invalid or expired token') {
+            return res.status(403).json({ error: 'Invalid or expired token!' });
+        } else {
+            return res.status(500).json({ error: 'An unexpected error occurred during login.' });
+        }
+    }
+};
+
+
 
 exports.verifyEmail = async (req, res) => {
     const { token } = req.query;

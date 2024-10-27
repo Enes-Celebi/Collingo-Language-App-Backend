@@ -8,7 +8,8 @@ const {
     requestPasswordReset,
     verifyResetCode, 
     resetPasswordWithCode,
-    changeUsername
+    changeUsername,
+    validateToken
 } = require('../controllers/authController');
 const passport = require('passport');
 
@@ -17,6 +18,9 @@ router.post('/register', registerUser);
 
 // Login user
 router.post('/login', loginUser);
+
+// Validate token
+router.post('/validate-token', validateToken);
 
 // Email verification
 router.get('/verify-email', verifyEmail);

@@ -19,7 +19,13 @@ const findUserByEmail = async (email) => {
     return userResult.rows[0];
 };
 
+const findUserById = async(id) => {
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    return userResult.rows[0];
+}
+
 exports.findUserByEmail = findUserByEmail;
+exports.findUserById = findUserById;
 
 exports.requestPasswordReset = async (email) => {
     const user = await findUserByEmail(email);
@@ -120,6 +126,34 @@ exports.loginUser = async (email, password) => {
     } catch (error) {
         console.error("Error logging in:", error);
         throw error;
+    }
+};
+
+exports.validateToken = async (token) => {
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await findUserById(decoded.id);
+
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        if (!user.isverified) {
+            throw new Error('Email not verified');
+        }
+
+        return user;
+    } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+            console.error("Token has expired.");
+            throw new Error('Invalid or expired token');
+        } else if (error.name === 'JsonWebTokenError') {
+            console.error("JWT is malformed or invalid.");
+            throw new Error('Invalid or expired token');
+        } else {
+            console.error("Error validating token:", error);
+            throw new Error('An error occurred during token validation');
+        }
     }
 };
 
